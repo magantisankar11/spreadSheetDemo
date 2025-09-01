@@ -1,6 +1,6 @@
 <template>
   <div style="padding:16px; max-width:1100px; margin:0 auto;">
-    <h2>JSpreadsheet (Vue 3) — Render on load + CRUD</h2>
+    <h2>Demo JSpreadsheet</h2>
 
     <!-- host for the spreadsheet -->
     <div ref="host" style="margin-top:12px; border:1px solid #e2e8f0; border-radius:8px; padding:8px;"></div>
@@ -11,10 +11,6 @@
       <button @click="updateFirstCell">Update [A1]</button>
       <button @click="showData">Show Data (console & alert)</button>
     </div>
-
-    <p style="margin-top:12px; color:#666">
-      Notes: The code uses defensive checks (works across jspreadsheet versions that return a workbook or a sheet directly).
-    </p>
   </div>
 </template>
 
