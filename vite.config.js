@@ -18,6 +18,7 @@ export default defineConfig({
   server: {
     port: 5173,      // 👈 choose your port here
     host: true,      // allow access from network (e.g., LAN or Render preview)
-    open: true       // auto-open browser on start
+    open: true,       // auto-open browser on start
+    allowedHosts: 'all', // 👈 allow access from network (e.g., LAN or Render preview)
   }
 })
