@@ -1,28 +1,21 @@
 <template>
   <div style="padding:16px; max-width:1100px; margin:0 auto;">
-    <h2>Demo JSpreadsheet</h2>
+    <h2>Google Sheet Data (via JSpreadsheet)</h2>
 
-    <!-- host for the spreadsheet -->
+    <!-- JSpreadsheet host -->
     <div ref="host" style="margin-top:12px; border:1px solid #e2e8f0; border-radius:8px; padding:8px;"></div>
-
-    <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
-      <button @click="addRow">Add Row</button>
-      <button @click="deleteSelectedOrLastRow">Delete Selected / Last Row</button>
-      <button @click="updateFirstCell">Update [A1]</button>
-      <button @click="showData">Show Data (console & alert)</button>
-    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
-// community edition package
 import jspreadsheet from 'jspreadsheet-ce'
 import 'jspreadsheet-ce/dist/jspreadsheet.css'
 import 'jsuites/dist/jsuites.css'
 
-const host = ref(null)
+const host = ref(null);
 const workbook = ref(null)
+let sheetInstance = null
 
 // helper returning the first worksheet object or the sheet object itself
 const sheet = () => {
@@ -45,8 +38,31 @@ const columns = [
   { title: 'Age', type: 'numeric', width: 80 }
 ]
 
+function renderJSpreadsheet(data) {
+  // destroy old instance if exists
+  if (sheetInstance) {
+    host.value.innerHTML = ""
+  }
+
+  sheetInstance = jspreadsheet(host.value, {
+    data,
+    minDimensions: [data[0]?.length || 4, data.length || 10],
+    search: true,
+    editable: false // read-only view
+  })
+}
+function checkForChanges() {
+  google.script.run
+    .withSuccessHandler((info) => {
+      console.log("Last Edited:", info)
+      alert(`Cell ${info.cell} changed to: ${info.value}`)
+    })
+    .getLastEdited()
+}
+
+// auto-load when sidebar mounts
 onMounted(() => {
-  // create a workbook with a single worksheet — works with modern jspreadsheet versions
+   // create a workbook with a single worksheet — works with modern jspreadsheet versions
   workbook.value = jspreadsheet(host.value, {
     worksheets: [
       {
@@ -62,127 +78,20 @@ onMounted(() => {
     data: initialData,
     columns
   })
-
-  // small safety: if workbook created but no worksheets and newer api is different,
-  // ensure at least workbook is usable.
-  console.log('JSpreadsheet workbook created:', workbook.value)
+  google.script.run
+    .withSuccessHandler((data) => {
+      console.log("Loaded sheet data:", data)
+      renderJSpreadsheet(data)
+    })
+    .getSheetData();
+     // poll every 5 seconds
+  setInterval(checkForChanges, 5000)
 })
-
-// --- CRUD helpers with defensive checks ---
-
-function addRow() {
-  const s = sheet()
-  if (!s) return alert('Sheet not ready yet')
-
-  const newRow = [`${Date.now()}`, 'New User', 'Role', 20]
-
-  try {
-    // try the convenient insertRow API first (many jspreadsheet versions have it)
-    if (typeof s.insertRow === 'function') {
-      // some implementations accept the values array directly, some require a nested array
-      try { s.insertRow(newRow) } catch (e) { s.insertRow([newRow]) }
-    } else {
-      // fallback: rebuild data array and set it (if setData exists)
-      const d = typeof s.getData === 'function' ? s.getData() : []
-      d.push(newRow)
-      if (typeof s.setData === 'function') {
-        s.setData(d)
-      } else {
-        // last-resort: log so you can inspect
-        console.warn('No insertRow or setData available; new data:', d)
-        alert('Add-row fallback used; check console for details.')
-      }
-    }
-  } catch (err) {
-    console.error('addRow error:', err)
-    alert('Failed to add row — check console for details.')
-  }
-}
-
-function deleteSelectedOrLastRow() {
-  const s = sheet()
-  if (!s) return alert('Sheet not ready yet')
-
-  try {
-    // prefer deleting a selected row if API exposes selected rows
-    if (typeof s.getSelectedRows === 'function') {
-      const sel = s.getSelectedRows()
-      if (Array.isArray(sel) && sel.length) {
-        // some versions expect deleteRow(index) or deleteRow(index, count)
-        if (typeof s.deleteRow === 'function') {
-          try { s.deleteRow(sel[0]) } catch (e) { s.deleteRow(sel[0], 1) }
-          return
-        }
-      }
-    }
-
-    // otherwise delete last row
-    if (typeof s.getData === 'function') {
-      const d = s.getData()
-      if (d.length === 0) return alert('No rows to delete')
-      const newData = d.slice(0, -1)
-      if (typeof s.setData === 'function') {
-        s.setData(newData)
-      } else if (typeof s.deleteRow === 'function') {
-        try { s.deleteRow(d.length - 1) } catch (e) { s.deleteRow(d.length - 1, 1) }
-      } else {
-        alert('Cannot delete rows with current jspreadsheet API (see console).')
-        console.warn('delete fallback, newData:', newData)
-      }
-    } else {
-      alert('Cannot read data; getData not available.')
-    }
-  } catch (err) {
-    console.error('deleteSelectedOrLastRow error:', err)
-    alert('Failed to delete row — check console.')
-  }
-}
-
-function updateFirstCell() {
-  const s = sheet()
-  if (!s) return alert('Sheet not ready yet')
-  try {
-    if (typeof s.setValueFromCoords === 'function') {
-      // setValueFromCoords(col, row, value, triggerEvent?)
-      s.setValueFromCoords(0, 0, 'UPDATED', true)
-    } else if (typeof s.setValue === 'function') {
-      // some older variants have setValue(colIndex, rowIndex, value)
-      try { s.setValue(0, 0, 'UPDATED') } catch (e) { s.setValue(0, 'UPDATED') }
-    } else {
-      // fallback: replace via data array
-      const d = typeof s.getData === 'function' ? s.getData() : null
-      if (d) {
-        if (!d[0]) d[0] = []
-        d[0][0] = 'UPDATED'
-        if (typeof s.setData === 'function') s.setData(d)
-        else console.warn('No setData; data updated locally:', d)
-      } else {
-        alert('No API available to update cells.')
-      }
-    }
-  } catch (err) {
-    console.error('updateFirstCell error:', err)
-    alert('Failed to update cell — check console.')
-  }
-}
-
-function showData() {
-  const s = sheet()
-  if (!s) return alert('Sheet not ready yet')
-  try {
-    const d = typeof s.getData === 'function' ? s.getData() : null
-    console.log('Sheet data:', d ?? s)
-    alert(JSON.stringify(d ?? 'no getData', null, 2))
-  } catch (err) {
-    console.error('showData error:', err)
-    alert('Failed to read data — check console.')
-  }
-}
 </script>
 
 <style>
-/* optional light styling for buttons */
 button {
+  margin-top: 12px;
   padding: 8px 12px;
   border-radius: 6px;
   border: 1px solid #d1d5db;
