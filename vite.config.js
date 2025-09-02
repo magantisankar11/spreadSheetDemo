@@ -3,12 +3,24 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
+import { viteSingleFile } from 'vite-plugin-singlefile'
+
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: './',   // ensures assets use relative paths
+  build: {
+    cssCodeSplit: false,
+    assetsInlineLimit: 100000000, // make sure all assets get inlined
+    rollupOptions: {
+      output: {
+      }
+    }
+  },
   plugins: [
     vue(),
     vueDevTools(),
+    viteSingleFile()
   ],
   resolve: {
     alias: {

@@ -4,11 +4,14 @@
 
     <!-- JSpreadsheet host -->
     <div ref="host" style="margin-top:12px; border:1px solid #e2e8f0; border-radius:8px; padding:8px;"></div>
+    <button @click="cellValue">Last updated cell value</button>
+    <button @click="checkForChanges">Last cell value</button>
+    <div id="cellValue"></div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import jspreadsheet from 'jspreadsheet-ce'
 import 'jspreadsheet-ce/dist/jspreadsheet.css'
 import 'jsuites/dist/jsuites.css'
@@ -52,16 +55,44 @@ function renderJSpreadsheet(data) {
   })
 }
 function checkForChanges() {
-  google.script.run
-    .withSuccessHandler((info) => {
-      console.log("Last Edited:", info)
-      alert(`Cell ${info.cell} changed to: ${info.value}`)
-    })
-    .getLastEdited()
+   if (typeof google !== "undefined" && google.script && google.script.run) {
+    google.script.run
+      .withSuccessHandler((data) => {
+        console.log("Last edited cell:", data);
+        console.log(`Last edited value: ${data.value} at row ${data.row}, col ${data.col}`);
+        document.getElementById("cellValue").innerText = data.value;
+      })
+      .getLastEdited();
+   }
+}
+
+function cellValue() {
+   if (typeof google !== "undefined" && google.script && google.script.run) {
+    google.script.run
+      .withSuccessHandler((data) => {
+        console.log("Last edited cell:", data);
+        console.log(`Last edited value: ${data.value} at row ${data.row}, col ${data.col}`);
+        document.getElementById("cellValue").innerText = data.value;
+      })
+      .getLastChange();
+   }
 }
 
 // auto-load when sidebar mounts
 onMounted(() => {
+  const handleMessage = (event) => {
+        // Ensure message is from the iframe
+        if (event.data.action === "getSheetData") {
+          google.script.run
+            .withSuccessHandler((data) => {
+              // Send data back to iframe
+              event.source.postMessage({ action: "sheetData", data }, event.origin);
+            })
+            .getSheetData();
+        }
+  };
+
+  window.addEventListener("message", handleMessage);
    // create a workbook with a single worksheet — works with modern jspreadsheet versions
   workbook.value = jspreadsheet(host.value, {
     worksheets: [
@@ -78,15 +109,20 @@ onMounted(() => {
     data: initialData,
     columns
   })
-  google.script.run
-    .withSuccessHandler((data) => {
-      console.log("Loaded sheet data:", data)
-      renderJSpreadsheet(data)
-    })
-    .getSheetData();
+   if (typeof google !== "undefined" && google.script && google.script.run) {
+    google.script.run
+      .withSuccessHandler((data) => {
+        console.log("Loaded sheet data:", data)
+        renderJSpreadsheet(data)
+      })
+      .getSheetData()
+  }
      // poll every 5 seconds
-  setInterval(checkForChanges, 5000)
-})
+  // setInterval(checkForChanges, 5000)
+});
+onBeforeUnmount(() => {
+        window.removeEventListener("message", handleMessage);
+      });
 </script>
 
 <style>
