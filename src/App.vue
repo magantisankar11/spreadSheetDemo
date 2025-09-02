@@ -77,7 +77,6 @@ function cellValue() {
       .getLastChange();
    }
 }
-
 // auto-load when sidebar mounts
 onMounted(() => {
   const handleMessage = (event) => {
@@ -91,7 +90,9 @@ onMounted(() => {
             .getSheetData();
         }
   };
-
+setTimeout(() => {
+    window.parent.postMessage({ action: "getSheetData" }, "*");
+}, 7000);
   window.addEventListener("message", handleMessage);
    // create a workbook with a single worksheet — works with modern jspreadsheet versions
   workbook.value = jspreadsheet(host.value, {
